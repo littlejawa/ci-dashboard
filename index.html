@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSC CI Dashboard (Live)</title>
+<style>
+:root {
+  --bg: #f8f9fa; --surface: #fff; --border: #dee2e6; --text: #212529;
+  --text-muted: #6c757d; --success: #198754; --failure: #dc3545;
+  --pending: #ffc107; --unknown: #6c757d; --hover: #f1f3f5;
+  --accent: #0d6efd; --accent-light: #e7f1ff;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; }
+.header h1 { font-size: 20px; font-weight: 600; }
+.header .meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+.progress-bar-container {
+  padding: 0 24px; display: none;
+}
+.progress-bar-outer {
+  width: 100%; height: 6px; background: var(--border); border-radius: 3px;
+  margin: 12px 0 4px; overflow: hidden;
+}
+.progress-bar-inner {
+  height: 100%; background: var(--accent); border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.progress-text { font-size: 12px; color: var(--text-muted); }
+
+.summary-bar { display: flex; gap: 16px; padding: 16px 24px; flex-wrap: wrap; }
+.summary-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 20px; min-width: 140px; text-align: center;
+}
+.summary-card .value { font-size: 28px; font-weight: 700; }
+.summary-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.summary-card.success .value { color: var(--success); }
+.summary-card.failure .value { color: var(--failure); }
+
+.filters {
+  display: flex; gap: 12px; padding: 12px 24px; flex-wrap: wrap; align-items: center;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.filters label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.filters select, .filters input {
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px;
+  font-size: 13px; background: var(--bg);
+}
+.filters .filter-group { display: flex; flex-direction: column; gap: 2px; }
+.filters .reset-btn {
+  padding: 6px 14px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; cursor: pointer; font-size: 13px; align-self: flex-end;
+}
+.filters .reset-btn:hover { background: var(--border); }
+
+.table-container { padding: 0 24px 24px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+thead th {
+  padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
+  background: var(--bg); border-bottom: 2px solid var(--border); cursor: pointer;
+  user-select: none; white-space: nowrap;
+}
+thead th:hover { color: var(--text); }
+thead th .sort-arrow { margin-left: 4px; font-size: 10px; }
+tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; }
+tbody tr:hover { background: var(--hover); }
+tbody tr.expanded { background: var(--accent-light); }
+td { padding: 8px 12px; white-space: nowrap; }
+
+.status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.status-dot.success { background: var(--success); }
+.status-dot.failure { background: var(--failure); }
+.status-dot.pending { background: var(--pending); }
+.status-dot.unknown { background: var(--unknown); }
+.status-dot.loading { background: var(--border); animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.pass-rate-bar { display: inline-flex; align-items: center; gap: 6px; }
+.pass-rate-bar .bar { width: 60px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.pass-rate-bar .bar .fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+
+.history-bar { display: inline-flex; gap: 2px; align-items: flex-end; height: 20px; }
+.history-bar .run-tick { width: 6px; min-height: 4px; border-radius: 1px; }
+.history-bar .run-tick.success { background: var(--success); height: 20px; }
+.history-bar .run-tick.failure { background: var(--failure); height: 20px; }
+.history-bar .run-tick.pending { background: var(--pending); height: 12px; }
+
+.detail-row td { padding: 0; cursor: default; }
+.detail-row:hover { background: var(--surface); }
+.detail-panel { padding: 16px 24px; background: var(--bg); border-top: 1px solid var(--border); }
+.detail-panel h3 { font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+.detail-panel h3 a { font-size: 12px; font-weight: 400; }
+.runs-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
+.runs-table th { padding: 6px 10px; font-size: 11px; text-align: left; background: var(--surface); border-bottom: 1px solid var(--border); cursor: default; }
+.runs-table td { padding: 6px 10px; font-size: 13px; border-bottom: 1px solid var(--border); }
+.runs-table tr:last-child td { border-bottom: none; }
+
+.load-more-btn {
+  margin-top: 10px; padding: 6px 16px; background: var(--accent);
+  color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
+}
+.load-more-btn:hover { opacity: 0.9; }
+.load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+}
+.badge.success { background: #d1e7dd; color: #0f5132; }
+.badge.failure { background: #f8d7da; color: #842029; }
+.badge.pending { background: #fff3cd; color: #664d03; }
+
+.empty-state { text-align: center; padding: 48px; color: var(--text-muted); }
+.loading { text-align: center; padding: 48px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Sandboxed Containers Operator — CI Dashboard <span style="font-size:12px;color:var(--text-muted);font-weight:400">(live)</span></h1>
+  <div class="meta" id="meta-info">Discovering jobs...</div>
+</div>
+
+<div class="progress-bar-container" id="progress-container">
+  <div class="progress-bar-outer"><div class="progress-bar-inner" id="progress-bar" style="width:0%"></div></div>
+  <div class="progress-text" id="progress-text"></div>
+</div>
+
+<div class="summary-bar" id="summary-bar"></div>
+
+<div class="filters" id="filters">
+  <div class="filter-group">
+    <label>Cloud</label>
+    <select id="filter-cloud"><option value="">All</option></select>
+  </div>
+  <div class="filter-group">
+    <label>OCP Version</label>
+    <select id="filter-ocp"><option value="">All</option></select>
+  </div>
+  <div class="filter-group">
+    <label>Test Type</label>
+    <select id="filter-test"><option value="">All</option></select>
+  </div>
+  <div class="filter-group">
+    <label>Release</label>
+    <select id="filter-release"><option value="">All</option></select>
+  </div>
+  <div class="filter-group">
+    <label>Status</label>
+    <select id="filter-status">
+      <option value="">All</option>
+      <option value="success">Passing</option>
+      <option value="failure">Failing</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Search</label>
+    <input type="text" id="filter-search" placeholder="Job name...">
+  </div>
+  <button class="reset-btn" onclick="resetFilters()">Reset</button>
+</div>
+
+<div class="table-container">
+  <table id="jobs-table">
+    <thead>
+      <tr>
+        <th data-sort="last_status" style="width:40px"></th>
+        <th data-sort="test_type">Test Type</th>
+        <th data-sort="cloud">Cloud</th>
+        <th data-sort="ocp_version">OCP</th>
+        <th data-sort="release_type">Release</th>
+        <th data-sort="pass_rate">Pass Rate</th>
+        <th data-sort="last_run">Last Run</th>
+        <th data-sort="duration">Duration</th>
+        <th>History (recent &rarr; old)</th>
+      </tr>
+    </thead>
+    <tbody id="jobs-body"></tbody>
+  </table>
+  <div class="empty-state" id="empty-state" style="display:none">No jobs match the current filters.</div>
+</div>
+
+<script>
+const GCS_API = "https://storage.googleapis.com/storage/v1/b";
+const GCS_DL  = "https://storage.googleapis.com/download/storage/v1/b";
+const GCS_BUCKET = "test-platform-results-public";
+const JOB_PREFIX = "periodic-ci-openshift-sandboxed-containers-operator-devel-";
+const PROW = "https://prow.ci.openshift.org";
+const MAX_BUILDS_PER_JOB = 100;
+const CONCURRENT_JOBS = 6;
+const CONCURRENT_BUILDS = 10;
+
+const VARIANT_MAP = [
+  ["downstream-candidate500",     { ocp_version: "5.0",  release_type: "Pre-GA" }],
+  ["downstream-candidate422",     { ocp_version: "4.22", release_type: "Pre-GA" }],
+  ["downstream-candidate421-aro", { ocp_version: "4.21", release_type: "Pre-GA", cloud: "aro" }],
+  ["downstream-aro421",           { ocp_version: "4.21", release_type: "Pre-GA", cloud: "aro" }],
+  ["downstream-candidate421",     { ocp_version: "4.21", release_type: "Pre-GA" }],
+  ["downstream-candidate420-aro", { ocp_version: "4.20", release_type: "Pre-GA", cloud: "aro" }],
+  ["downstream-candidate420",     { ocp_version: "4.20", release_type: "Pre-GA" }],
+  ["downstream-candidate",        { ocp_version: "4.19", release_type: "Pre-GA" }],
+  ["downstream-release",          { ocp_version: "4.19", release_type: "GA" }],
+];
+const KNOWN_CLOUDS = new Set(["azure", "aws", "aro"]);
+
+let dashboardData = { jobs: [] };
+let sortCol = "test_type";
+let sortAsc = true;
+let expandedJob = null;
+let onDemandCache = {};
+let loadStartTime = 0;
+let jobsCompleted = 0;
+let jobsTotal = 0;
+
+function parseJobName(jobName) {
+  if (!jobName.startsWith(JOB_PREFIX))
+    return { cloud: "unknown", ocp_version: "unknown", release_type: "unknown", test_type: jobName };
+
+  const suffix = jobName.slice(JOB_PREFIX.length);
+  let variantMeta = {};
+  let remainder = suffix;
+
+  for (const [vp, meta] of VARIANT_MAP) {
+    if (suffix.startsWith(vp)) {
+      variantMeta = { ...meta };
+      remainder = suffix.slice(vp.length).replace(/^-/, "");
+      break;
+    }
+  }
+
+  let cloud = variantMeta.cloud || null;
+  const ocp_version = variantMeta.ocp_version || "unknown";
+  const release_type = variantMeta.release_type || "unknown";
+  let test_type;
+
+  if (cloud && remainder) {
+    const parts = remainder.split("-");
+    if (parts[0] === cloud) parts.shift();
+    if (parts[0] === "ipi") parts.shift();
+    test_type = parts.join("-") || "unknown";
+  } else if (cloud) {
+    test_type = "unknown";
+  } else if (remainder) {
+    const parts = remainder.split("-");
+    if (KNOWN_CLOUDS.has(parts[0])) {
+      cloud = parts[0];
+      const rest = parts.slice(1);
+      if (rest[0] === "ipi") rest.shift();
+      test_type = rest.join("-") || "unknown";
+    } else {
+      cloud = "N/A";
+      test_type = remainder;
+    }
+  } else {
+    cloud = "unknown";
+    test_type = "unknown";
+  }
+
+  return { cloud: cloud.toUpperCase(), ocp_version, release_type, test_type };
+}
+
+// --- GCS fetching ---
+
+async function gcsListPrefixes(prefix) {
+  let allPrefixes = [];
+  let pageToken = null;
+  do {
+    const params = new URLSearchParams({ prefix, delimiter: "/", maxResults: "5000" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const resp = await fetch(`${GCS_API}/${GCS_BUCKET}/o?${params}`);
+    const data = await resp.json();
+    allPrefixes.push(...(data.prefixes || []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return allPrefixes;
+}
+
+async function discoverJobs() {
+  const dirs = await gcsListPrefixes(`logs/${JOB_PREFIX}`);
+  return dirs
+    .filter(d => d.startsWith("logs/"))
+    .map(d => d.replace(/\/$/, "").split("/").pop())
+    .sort();
+}
+
+async function fetchBuildResult(jobName, buildId) {
+  const prefix = `logs/${jobName}/${buildId}`;
+  const startedUrl = `${GCS_DL}/${GCS_BUCKET}/o/${encodeURIComponent(prefix + "/started.json")}?alt=media`;
+  const finishedUrl = `${GCS_DL}/${GCS_BUCKET}/o/${encodeURIComponent(prefix + "/finished.json")}?alt=media`;
+
+  const [sResp, fResp] = await Promise.allSettled([fetch(startedUrl), fetch(finishedUrl)]);
+  if (sResp.status !== "fulfilled" || !sResp.value.ok) return null;
+
+  const started = await sResp.value.json();
+  const result = {
+    build_id: buildId,
+    start_time: started.timestamp || 0,
+    status: "pending",
+    duration: null,
+    prow_url: `${PROW}/view/gs/${GCS_BUCKET}/logs/${jobName}/${buildId}`,
+  };
+
+  if (fResp.status === "fulfilled" && fResp.value.ok) {
+    const finished = await fResp.value.json();
+    result.status = finished.passed ? "success" : "failure";
+    result.result = finished.result || "UNKNOWN";
+    if (finished.timestamp && started.timestamp)
+      result.duration = Math.round(finished.timestamp - started.timestamp);
+  }
+  return result;
+}
+
+async function pooledMap(items, fn, concurrency) {
+  const results = new Array(items.length);
+  let idx = 0;
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
+
+async function fetchJobResults(jobName) {
+  const dirs = await gcsListPrefixes(`logs/${jobName}/`);
+  const buildIds = dirs
+    .map(d => d.replace(/\/$/, "").split("/").pop())
+    .filter(id => /^\d+$/.test(id))
+    .sort((a, b) => parseInt(b) - parseInt(a))
+    .slice(0, MAX_BUILDS_PER_JOB);
+
+  const results = await pooledMap(buildIds, id => fetchBuildResult(jobName, id), CONCURRENT_BUILDS);
+  return results
+    .filter(r => r != null)
+    .sort((a, b) => b.start_time - a.start_time);
+}
+
+function buildJobEntry(jobName, runs) {
+  const meta = parseJobName(jobName);
+  const total = runs.length;
+  const passed = runs.filter(r => r.status === "success").length;
+  return {
+    name: jobName,
+    ...meta,
+    runs,
+    summary: {
+      total_runs: total,
+      passed,
+      failed: total - passed,
+      pass_rate: total > 0 ? Math.round(passed / total * 1000) / 10 : 0,
+      last_run: runs[0]?.start_time || null,
+      last_status: runs[0]?.status || "unknown",
+    },
+    prow_history_url: `${PROW}/job-history/gs/${GCS_BUCKET}/logs/${jobName}`,
+  };
+}
+
+// --- Progress UI ---
+
+function updateProgress(completed, total, currentJob) {
+  const pct = Math.round(completed / total * 100);
+  document.getElementById("progress-bar").style.width = pct + "%";
+  const elapsed = ((performance.now() - loadStartTime) / 1000).toFixed(1);
+  const shortName = currentJob ? currentJob.slice(JOB_PREFIX.length) : "";
+  document.getElementById("progress-text").textContent =
+    `${completed}/${total} jobs loaded · ${elapsed}s elapsed` + (shortName ? ` · ${shortName}` : "");
+}
+
+// --- Main load ---
+
+async function loadLive() {
+  loadStartTime = performance.now();
+  document.getElementById("progress-container").style.display = "";
+
+  document.getElementById("meta-info").textContent = "Discovering jobs from GCS...";
+  let jobNames;
+  try {
+    jobNames = await discoverJobs();
+  } catch (e) {
+    document.getElementById("meta-info").textContent = `Error discovering jobs: ${e.message}`;
+    return;
+  }
+
+  jobsTotal = jobNames.length;
+  jobsCompleted = 0;
+  document.getElementById("meta-info").textContent = `Found ${jobsTotal} jobs — fetching results...`;
+  updateProgress(0, jobsTotal, "");
+
+  initUI();
+
+  // Show placeholder rows immediately
+  dashboardData.jobs = jobNames.map(name => {
+    const meta = parseJobName(name);
+    return {
+      name, ...meta, runs: [], _loading: true,
+      summary: { total_runs: 0, passed: 0, failed: 0, pass_rate: 0, last_run: null, last_status: "loading" },
+      prow_history_url: `${PROW}/job-history/gs/${GCS_BUCKET}/logs/${name}`,
+    };
+  });
+  populateFilters();
+  renderTable();
+
+  // Fetch job results with limited concurrency, updating the table as each completes
+  await pooledMap(jobNames, async (name) => {
+    let runs;
+    try {
+      runs = await fetchJobResults(name);
+    } catch (e) {
+      console.error(`Error fetching ${name}:`, e);
+      runs = [];
+    }
+    const entry = buildJobEntry(name, runs);
+    const idx = dashboardData.jobs.findIndex(j => j.name === name);
+    if (idx >= 0) dashboardData.jobs[idx] = entry;
+
+    jobsCompleted++;
+    updateProgress(jobsCompleted, jobsTotal, name);
+    populateFilters();
+    renderSummary();
+    renderTable();
+  }, CONCURRENT_JOBS);
+
+  const elapsed = ((performance.now() - loadStartTime) / 1000).toFixed(1);
+  const totalRuns = dashboardData.jobs.reduce((s, j) => s + j.summary.total_runs, 0);
+  document.getElementById("meta-info").textContent =
+    `Live data · ${dashboardData.jobs.length} jobs · ${totalRuns} runs · loaded in ${elapsed}s`;
+  document.getElementById("progress-container").style.display = "none";
+}
+
+// --- Dashboard UI (same as prefetched version) ---
+
+function initUI() {
+  document.querySelectorAll("thead th[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const col = th.dataset.sort;
+      if (sortCol === col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = true; }
+      renderTable();
+    });
+  });
+  document.querySelectorAll(".filters select, .filters input").forEach(el => {
+    el.addEventListener("input", () => { renderSummary(); renderTable(); });
+  });
+}
+
+function populateFilters() {
+  const sets = { cloud: new Set(), ocp: new Set(), test: new Set(), release: new Set() };
+  dashboardData.jobs.forEach(j => {
+    sets.cloud.add(j.cloud);
+    sets.ocp.add(j.ocp_version);
+    sets.test.add(j.test_type);
+    sets.release.add(j.release_type);
+  });
+  updateSelect("filter-cloud", sorted(sets.cloud));
+  updateSelect("filter-ocp", sorted(sets.ocp));
+  updateSelect("filter-test", sorted(sets.test));
+  updateSelect("filter-release", sorted(sets.release));
+}
+
+function updateSelect(id, values) {
+  const sel = document.getElementById(id);
+  const current = sel.value;
+  const existing = new Set([...sel.options].map(o => o.value));
+  values.forEach(v => {
+    if (!existing.has(v)) {
+      const o = document.createElement("option"); o.value = v; o.textContent = v; sel.appendChild(o);
+      existing.add(v);
+    }
+  });
+  sel.value = current;
+}
+
+function sorted(set) { return [...set].sort(); }
+
+function getFiltered() {
+  const fc = document.getElementById("filter-cloud").value;
+  const fo = document.getElementById("filter-ocp").value;
+  const ft = document.getElementById("filter-test").value;
+  const fr = document.getElementById("filter-release").value;
+  const fs = document.getElementById("filter-status").value;
+  const fq = document.getElementById("filter-search").value.toLowerCase();
+  return dashboardData.jobs.filter(j =>
+    (!fc || j.cloud === fc) &&
+    (!fo || j.ocp_version === fo) &&
+    (!ft || j.test_type === ft) &&
+    (!fr || j.release_type === fr) &&
+    (!fs || j.summary.last_status === fs) &&
+    (!fq || j.name.toLowerCase().includes(fq))
+  );
+}
+
+function renderSummary() {
+  const jobs = getFiltered().filter(j => !j._loading);
+  const total = jobs.length;
+  const passing = jobs.filter(j => j.summary.last_status === "success").length;
+  const failing = jobs.filter(j => j.summary.last_status === "failure").length;
+  const allRuns = jobs.reduce((s, j) => s + j.summary.total_runs, 0);
+  const allPassed = jobs.reduce((s, j) => s + j.summary.passed, 0);
+  const overallRate = allRuns > 0 ? Math.round(allPassed / allRuns * 100) : 0;
+
+  document.getElementById("summary-bar").innerHTML = `
+    <div class="summary-card"><div class="value">${total}</div><div class="label">Jobs loaded</div></div>
+    <div class="summary-card success"><div class="value">${passing}</div><div class="label">Passing</div></div>
+    <div class="summary-card failure"><div class="value">${failing}</div><div class="label">Failing</div></div>
+    <div class="summary-card"><div class="value">${overallRate}%</div><div class="label">Overall Pass Rate</div></div>
+    <div class="summary-card"><div class="value">${allRuns}</div><div class="label">Total Runs</div></div>
+  `;
+}
+
+function renderTable() {
+  const jobs = getFiltered();
+  const tbody = document.getElementById("jobs-body");
+  const empty = document.getElementById("empty-state");
+
+  if (jobs.length === 0) { tbody.innerHTML = ""; empty.style.display = ""; return; }
+  empty.style.display = "none";
+
+  jobs.sort((a, b) => {
+    // Loading rows always sort to the bottom
+    if (a._loading && !b._loading) return 1;
+    if (!a._loading && b._loading) return -1;
+    let va, vb;
+    if (sortCol === "pass_rate") { va = a.summary.pass_rate; vb = b.summary.pass_rate; }
+    else if (sortCol === "last_run") { va = a.summary.last_run || 0; vb = b.summary.last_run || 0; }
+    else if (sortCol === "last_status") { va = a.summary.last_status; vb = b.summary.last_status; }
+    else if (sortCol === "duration") {
+      va = a.runs[0]?.duration || 0; vb = b.runs[0]?.duration || 0;
+    }
+    else { va = a[sortCol] || ""; vb = b[sortCol] || ""; }
+    if (typeof va === "string") { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  document.querySelectorAll("thead th[data-sort]").forEach(th => {
+    const arrow = th.querySelector(".sort-arrow") || document.createElement("span");
+    arrow.className = "sort-arrow";
+    arrow.textContent = th.dataset.sort === sortCol ? (sortAsc ? "▲" : "▼") : "";
+    if (!th.querySelector(".sort-arrow")) th.appendChild(arrow);
+  });
+
+  tbody.innerHTML = "";
+  jobs.forEach(j => {
+    const tr = document.createElement("tr");
+    tr.dataset.jobName = j.name;
+
+    if (j._loading) {
+      tr.innerHTML = `
+        <td><span class="status-dot loading"></span></td>
+        <td><strong>${esc(j.test_type)}</strong></td>
+        <td>${esc(j.cloud)}</td>
+        <td>${esc(j.ocp_version)}</td>
+        <td>${esc(j.release_type)}</td>
+        <td style="color:var(--text-muted)">loading...</td>
+        <td></td><td></td><td></td>
+      `;
+      tbody.appendChild(tr);
+      return;
+    }
+
+    const lastRun = j.runs[0];
+    const duration = lastRun?.duration ? formatDuration(lastRun.duration) : "—";
+    const lastTime = j.summary.last_run ? timeAgo(j.summary.last_run) : "—";
+
+    tr.innerHTML = `
+      <td><span class="status-dot ${j.summary.last_status}"></span></td>
+      <td><strong>${esc(j.test_type)}</strong></td>
+      <td>${esc(j.cloud)}</td>
+      <td>${esc(j.ocp_version)}</td>
+      <td>${esc(j.release_type)}</td>
+      <td>${passRateHtml(j.summary.pass_rate)}</td>
+      <td title="${j.summary.last_run ? new Date(j.summary.last_run * 1000).toLocaleString() : ''}">${lastTime}</td>
+      <td>${duration}</td>
+      <td>${historyHtml(j.runs)}</td>
+    `;
+    tr.addEventListener("click", () => toggleDetail(j));
+    tbody.appendChild(tr);
+
+    if (expandedJob === j.name) {
+      tr.classList.add("expanded");
+      tbody.appendChild(createDetailRow(j));
+    }
+  });
+}
+
+function passRateHtml(rate) {
+  const color = rate >= 80 ? "var(--success)" : rate >= 50 ? "var(--pending)" : "var(--failure)";
+  return `<span class="pass-rate-bar">
+    <span class="bar"><span class="fill" style="width:${rate}%;background:${color}"></span></span>
+    <span>${rate}%</span>
+  </span>`;
+}
+
+function historyHtml(runs) {
+  const recent = runs.slice(0, 20);
+  return `<span class="history-bar">${recent.map(r =>
+    `<span class="run-tick ${r.status}" title="${new Date(r.start_time * 1000).toLocaleDateString()} — ${r.status}"></span>`
+  ).join("")}</span>`;
+}
+
+function toggleDetail(job) {
+  expandedJob = expandedJob === job.name ? null : job.name;
+  renderTable();
+}
+
+function createDetailRow(job) {
+  const tr = document.createElement("tr");
+  tr.className = "detail-row";
+  const td = document.createElement("td");
+  td.colSpan = 9;
+
+  const allRuns = [...job.runs, ...(onDemandCache[job.name] || [])];
+
+  td.innerHTML = `
+    <div class="detail-panel">
+      <h3>${esc(job.name)} <a href="${job.prow_history_url}" target="_blank">View in Prow &rarr;</a></h3>
+      <table class="runs-table">
+        <thead><tr><th></th><th>Date</th><th>Status</th><th>Duration</th><th>Build</th></tr></thead>
+        <tbody>${allRuns.map(r => `
+          <tr>
+            <td><span class="status-dot ${r.status}"></span></td>
+            <td>${new Date(r.start_time * 1000).toLocaleString()}</td>
+            <td><span class="badge ${r.status}">${r.status}</span></td>
+            <td>${r.duration ? formatDuration(r.duration) : "—"}</td>
+            <td><a href="${r.prow_url}" target="_blank">${r.build_id}</a></td>
+          </tr>
+        `).join("")}</tbody>
+      </table>
+      <button class="load-more-btn" id="load-more-${css(job.name)}" onclick="loadOlderRuns('${esc(job.name)}')">
+        Load older runs
+      </button>
+    </div>
+  `;
+  tr.appendChild(td);
+  return tr;
+}
+
+async function loadOlderRuns(jobName) {
+  const btn = document.getElementById(`load-more-${css(jobName)}`);
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = "Loading...";
+
+  const existing = new Set();
+  const job = dashboardData.jobs.find(j => j.name === jobName);
+  if (job) job.runs.forEach(r => existing.add(r.build_id));
+  if (onDemandCache[jobName]) onDemandCache[jobName].forEach(r => existing.add(r.build_id));
+
+  try {
+    const buildIds = await listAllBuilds(jobName);
+    const missing = buildIds.filter(id => !existing.has(id)).slice(0, 50);
+
+    const results = await pooledMap(missing, id => fetchBuildResult(jobName, id), CONCURRENT_BUILDS);
+    const newRuns = results.filter(Boolean).sort((a, b) => b.start_time - a.start_time);
+
+    if (!onDemandCache[jobName]) onDemandCache[jobName] = [];
+    onDemandCache[jobName].push(...newRuns);
+    renderTable();
+  } catch (e) {
+    console.error("Failed to load older runs:", e);
+    btn.textContent = "Error — retry";
+    btn.disabled = false;
+  }
+}
+
+async function listAllBuilds(jobName) {
+  const dirs = await gcsListPrefixes(`logs/${jobName}/`);
+  return dirs
+    .map(d => d.replace(/\/$/, "").split("/").pop())
+    .filter(id => /^\d+$/.test(id))
+    .sort((a, b) => parseInt(b) - parseInt(a));
+}
+
+function formatDuration(seconds) {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m < 60) return `${m}m ${s}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+function timeAgo(ts) {
+  const diff = Math.floor(Date.now() / 1000 - ts);
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function css(s) { return s.replace(/[^a-zA-Z0-9-]/g, "_"); }
+function resetFilters() {
+  document.querySelectorAll(".filters select").forEach(s => s.value = "");
+  document.getElementById("filter-search").value = "";
+  renderSummary(); renderTable();
+}
+
+loadLive();
+</script>
+</body>
+</html>

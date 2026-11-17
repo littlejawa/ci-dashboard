@@ -1,50 +1,66 @@
 # OSC CI Dashboard
 
-A single-page dashboard for monitoring OpenShift Sandboxed Containers Operator CI job results.
+A dashboard for monitoring OpenShift Sandboxed Containers Operator periodic CI job results, powered by [prowjob-analyzer](https://github.com/openshift/sandboxed-containers-operator/tree/main/scripts/prowjob-analyzer).
 
-## What it does
+## How it works
 
-- Discovers all periodic CI jobs for `openshift/sandboxed-containers-operator` from the public GCS bucket
-- Fetches recent build results (pass/fail, duration, timestamps) live in the browser
-- Parses job metadata: cloud provider, OCP version, test type, release type
-- Displays a filterable, sortable table with per-job pass rates and history sparklines
-- Supports on-demand loading of older runs beyond the initial fetch window
+1. `collect.sh` runs [prowjob-analyzer](https://github.com/openshift/sandboxed-containers-operator/tree/main/scripts/prowjob-analyzer) to discover recent builds and analyze each one, producing one JSON file per build under `results/`.
+2. After analyzing all builds, it rebuilds `results/manifest.json` — a lightweight index with summary data for each build.
+3. `index.html` loads the manifest to populate a filterable table, and lazy-loads individual result files on demand for detailed views.
 
-No backend, no build step, no external dependencies. Everything runs client-side against the public Prow/GCS APIs.
+## Collecting results
 
-## Usage
+### Prerequisites
 
-Open `index.html` directly in a browser — it works from `file://` since it only fetches from public HTTPS APIs with permissive CORS headers.
+- Python 3
+- A clone of [sandboxed-containers-operator](https://github.com/openshift/sandboxed-containers-operator) with the `scripts/prowjob-analyzer/` directory (and its dependencies)
 
-Alternatively, serve it over HTTP:
+### Running
 
 ```bash
-cd osc-ci-dashboard
-python3 -m http.server 8080
-# open http://localhost:8080
+export PROWJOB_ANALYZER_DIR="/path/to/projob-analyzer"
+
+# Analyze builds from the last 7 days (default)
+./collect.sh
+
+# Analyze builds since a specific date
+./collect.sh --since 2026-11-01
+
+# Specify the prowjob-analyzer location
+./collect.sh --analyzer-dir /path/to/prowjob-analyzer
 ```
 
-Or enable GitHub Pages in the repo settings, pointing to the `main` branch root. The dashboard will be available at `https://<org>.github.io/osc-ci-dashboard/`.
+Collection is incremental: builds that already have a JSON file in `results/` are skipped, so re-running the script only analyzes new builds.
 
-## Data sources
+### Scheduling with cron
 
-All data comes from public, unauthenticated APIs:
+To keep the dashboard up to date automatically:
 
-- **Job discovery:** GCS listing of `gs://test-platform-results-public/logs/periodic-ci-openshift-sandboxed-containers-operator-*`
-- **Build results:** `started.json` and `finished.json` per build in the same bucket
-- **Links:** Each run links to its Prow build page for full logs and artifacts
+```bash
+# Run every 6 hours, analyze the last 3 days of builds
+0 */6 * * * /path/to/collect.sh --since "$(date -d '3 days ago' +\%Y-\%m-\%d)"
+```
 
-## Filters
+## Viewing the dashboard
 
-The dashboard supports filtering by:
+- From the root, run “python3 -m http.server 8080”
+- In your browser, go to "localhost:8080"
 
-| Filter | Values |
-|---|---|
-| Cloud | AWS, Azure, ARO, N/A (for non-cloud tests) |
-| OCP Version | 4.19 through 5.0 |
-| Test Type | kata, coco, peerpods, kata-disconnected, peerpods-sts, tls-scanner, etc. |
-| Release Type | Pre-GA, GA |
-| Status | Passing, Failing |
-| Search | Free-text match on full job name |
+## Dashboard features
 
-All columns are sortable. Click any row to expand and see individual run details with links to Prow.
+- **Summary cards**: total builds, pass/fail counts, pass rate, top failure pattern
+- **Filterable table**: cloud provider, OCP version, workload type, status, root cause pattern, free-text search
+- **Sortable columns**: click any column header to sort
+- **Detail view**: expand any row to see:
+  - Catalog info (tag, build date, kata RPM version, operator version)
+  - Category breakdown (infra, overall, smoke, OSC, kata upstream, CAA) with status and timing
+  - Root cause analysis with confidence level
+  - Failing tests list
+  - Test suite summary
+  - Links to Prow artifacts
+
+## Result files
+
+Each build produces a `<build-id>.json` file containing the full prowjob-analyzer output: job metadata, test results, failure analysis, root cause patterns, and artifact URLs.
+
+`manifest.json` is an index with summary fields extracted from each build file, used by the dashboard for the table view without loading every detail file.

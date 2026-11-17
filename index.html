@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OSC CI Dashboard (Live)</title>
+<title>OSC CI Dashboard</title>
 <style>
 :root {
   --bg: #f8f9fa; --surface: #fff; --border: #dee2e6; --text: #212529;
   --text-muted: #6c757d; --success: #198754; --failure: #dc3545;
-  --pending: #ffc107; --unknown: #6c757d; --hover: #f1f3f5;
+  --pending: #ffc107; --unknown: #adb5bd; --hover: #f1f3f5;
   --accent: #0d6efd; --accent-light: #e7f1ff;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -20,23 +20,10 @@ a:hover { text-decoration: underline; }
 .header h1 { font-size: 20px; font-weight: 600; }
 .header .meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
-.progress-bar-container {
-  padding: 0 24px; display: none;
-}
-.progress-bar-outer {
-  width: 100%; height: 6px; background: var(--border); border-radius: 3px;
-  margin: 12px 0 4px; overflow: hidden;
-}
-.progress-bar-inner {
-  height: 100%; background: var(--accent); border-radius: 3px;
-  transition: width 0.3s ease;
-}
-.progress-text { font-size: 12px; color: var(--text-muted); }
-
 .summary-bar { display: flex; gap: 16px; padding: 16px 24px; flex-wrap: wrap; }
 .summary-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-  padding: 12px 20px; min-width: 140px; text-align: center;
+  padding: 12px 20px; min-width: 120px; text-align: center;
 }
 .summary-card .value { font-size: 28px; font-weight: 700; }
 .summary-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -69,380 +56,185 @@ thead th {
 }
 thead th:hover { color: var(--text); }
 thead th .sort-arrow { margin-left: 4px; font-size: 10px; }
-tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; }
-tbody tr:hover { background: var(--hover); }
-tbody tr.expanded { background: var(--accent-light); }
+tbody tr.build-row { border-bottom: 1px solid var(--border); cursor: pointer; }
+tbody tr.build-row:hover { background: var(--hover); }
+tbody tr.build-row.expanded { background: var(--accent-light); }
 td { padding: 8px 12px; white-space: nowrap; }
 
 .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .status-dot.success { background: var(--success); }
 .status-dot.failure { background: var(--failure); }
-.status-dot.pending { background: var(--pending); }
+.status-dot.error { background: var(--failure); }
+.status-dot.timeout { background: var(--pending); }
+.status-dot.aborted { background: var(--unknown); }
 .status-dot.unknown { background: var(--unknown); }
-.status-dot.loading { background: var(--border); animation: pulse 1.2s infinite; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-.pass-rate-bar { display: inline-flex; align-items: center; gap: 6px; }
-.pass-rate-bar .bar { width: 60px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-.pass-rate-bar .bar .fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.cat-badges { display: inline-flex; gap: 3px; }
+.cat-badge {
+  display: inline-block; width: 20px; height: 20px; border-radius: 3px;
+  text-align: center; font-size: 10px; line-height: 20px; font-weight: 700; color: #fff;
+}
+.cat-badge.SUCCESS { background: var(--success); }
+.cat-badge.FAILURE { background: var(--failure); }
+.cat-badge.TEST_BUG { background: var(--pending); color: #333; }
+.cat-badge.skipped, .cat-badge.not-run, .cat-badge.unknown { background: var(--unknown); }
 
-.history-bar { display: inline-flex; gap: 2px; align-items: flex-end; height: 20px; }
-.history-bar .run-tick { width: 6px; min-height: 4px; border-radius: 1px; }
-.history-bar .run-tick.success { background: var(--success); height: 20px; }
-.history-bar .run-tick.failure { background: var(--failure); height: 20px; }
-.history-bar .run-tick.pending { background: var(--pending); height: 12px; }
+.pattern-tag {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+}
+.pattern-tag.timeout { background: #fff3cd; color: #664d03; }
+.pattern-tag.oom { background: #f8d7da; color: #842029; }
+.pattern-tag.network { background: #cff4fc; color: #055160; }
+.pattern-tag.quota, .pattern-tag.azure_quota { background: #e2e3e5; color: #41464b; }
+.pattern-tag.image_pull { background: #cfe2ff; color: #084298; }
+.pattern-tag.infrastructure { background: #e2e3e5; color: #41464b; }
+.pattern-tag.kata_init, .pattern-tag.rpm_install, .pattern-tag.rpm_cascading { background: #f8d7da; color: #842029; }
+.pattern-tag.go_build_failure { background: #fff3cd; color: #664d03; }
+.pattern-tag.catalogsource, .pattern-tag.olm_subscription, .pattern-tag.kbs_auth { background: #cff4fc; color: #055160; }
+.pattern-tag.default { background: #e2e3e5; color: #41464b; }
+
+.confidence-tag { font-size: 11px; color: var(--text-muted); }
+.confidence-tag.high { color: var(--success); }
+.confidence-tag.medium { color: var(--pending); }
+.confidence-tag.low { color: var(--failure); }
 
 .detail-row td { padding: 0; cursor: default; }
-.detail-row:hover { background: var(--surface); }
+.detail-row:hover { background: var(--surface) !important; }
 .detail-panel { padding: 16px 24px; background: var(--bg); border-top: 1px solid var(--border); }
-.detail-panel h3 { font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+.detail-panel h3 { font-size: 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .detail-panel h3 a { font-size: 12px; font-weight: 400; }
-.runs-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
-.runs-table th { padding: 6px 10px; font-size: 11px; text-align: left; background: var(--surface); border-bottom: 1px solid var(--border); cursor: default; }
-.runs-table td { padding: 6px 10px; font-size: 13px; border-bottom: 1px solid var(--border); }
-.runs-table tr:last-child td { border-bottom: none; }
+.detail-section { margin-bottom: 16px; }
+.detail-section h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
 
-.load-more-btn {
-  margin-top: 10px; padding: 6px 16px; background: var(--accent);
-  color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
+.cat-table, .tests-table, .artifacts-table {
+  width: 100%; border-collapse: collapse; background: var(--surface);
+  border-radius: 4px; overflow: hidden; border: 1px solid var(--border);
 }
-.load-more-btn:hover { opacity: 0.9; }
-.load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.badge {
-  display: inline-block; padding: 2px 8px; border-radius: 10px;
-  font-size: 11px; font-weight: 600; text-transform: uppercase;
+.cat-table th, .tests-table th, .artifacts-table th {
+  padding: 6px 10px; font-size: 11px; text-align: left;
+  background: var(--surface); border-bottom: 1px solid var(--border); cursor: default;
 }
-.badge.success { background: #d1e7dd; color: #0f5132; }
-.badge.failure { background: #f8d7da; color: #842029; }
-.badge.pending { background: #fff3cd; color: #664d03; }
+.cat-table td, .tests-table td, .artifacts-table td {
+  padding: 6px 10px; font-size: 13px; border-bottom: 1px solid var(--border);
+}
+.cat-table tr:last-child td, .tests-table tr:last-child td, .artifacts-table tr:last-child td { border-bottom: none; }
 
+.root-cause-box {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  padding: 12px; font-size: 13px;
+}
+.root-cause-box .cause-label { font-weight: 600; margin-right: 8px; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+.badge.success, .badge.SUCCESS { background: #d1e7dd; color: #0f5132; }
+.badge.failure, .badge.FAILURE { background: #f8d7da; color: #842029; }
+.badge.TEST_BUG { background: #fff3cd; color: #664d03; }
+.badge.skipped { background: #e2e3e5; color: #41464b; }
+.badge.not-run { background: #e2e3e5; color: #6c757d; }
+
+.detail-loading { padding: 20px; text-align: center; color: var(--text-muted); }
 .empty-state { text-align: center; padding: 48px; color: var(--text-muted); }
-.loading { text-align: center; padding: 48px; color: var(--text-muted); }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>Sandboxed Containers Operator — CI Dashboard <span style="font-size:12px;color:var(--text-muted);font-weight:400">(live)</span></h1>
-  <div class="meta" id="meta-info">Discovering jobs...</div>
-</div>
-
-<div class="progress-bar-container" id="progress-container">
-  <div class="progress-bar-outer"><div class="progress-bar-inner" id="progress-bar" style="width:0%"></div></div>
-  <div class="progress-text" id="progress-text"></div>
+  <h1>Sandboxed Containers Operator — CI Dashboard</h1>
+  <div class="meta" id="meta-info">Loading...</div>
 </div>
 
 <div class="summary-bar" id="summary-bar"></div>
 
-<div class="filters" id="filters">
+<div class="filters">
   <div class="filter-group">
-    <label>Cloud</label>
-    <select id="filter-cloud"><option value="">All</option></select>
+    <label>Provider</label>
+    <select id="filter-provider"><option value="">All</option></select>
   </div>
   <div class="filter-group">
     <label>OCP Version</label>
     <select id="filter-ocp"><option value="">All</option></select>
   </div>
   <div class="filter-group">
-    <label>Test Type</label>
-    <select id="filter-test"><option value="">All</option></select>
-  </div>
-  <div class="filter-group">
-    <label>Release</label>
-    <select id="filter-release"><option value="">All</option></select>
+    <label>Workload</label>
+    <select id="filter-workload"><option value="">All</option></select>
   </div>
   <div class="filter-group">
     <label>Status</label>
     <select id="filter-status">
       <option value="">All</option>
-      <option value="success">Passing</option>
-      <option value="failure">Failing</option>
+      <option value="success">Success</option>
+      <option value="failure">Failure</option>
     </select>
   </div>
   <div class="filter-group">
+    <label>Root Cause</label>
+    <select id="filter-pattern"><option value="">All</option></select>
+  </div>
+  <div class="filter-group">
     <label>Search</label>
-    <input type="text" id="filter-search" placeholder="Job name...">
+    <input type="text" id="filter-search" placeholder="Job name or build ID...">
   </div>
   <button class="reset-btn" onclick="resetFilters()">Reset</button>
 </div>
 
 <div class="table-container">
-  <table id="jobs-table">
+  <table id="builds-table">
     <thead>
       <tr>
-        <th data-sort="last_status" style="width:40px"></th>
-        <th data-sort="test_type">Test Type</th>
-        <th data-sort="cloud">Cloud</th>
+        <th data-sort="status" style="width:40px"></th>
+        <th data-sort="start_time">Date</th>
+        <th data-sort="provider">Provider</th>
         <th data-sort="ocp_version">OCP</th>
-        <th data-sort="release_type">Release</th>
-        <th data-sort="pass_rate">Pass Rate</th>
-        <th data-sort="last_run">Last Run</th>
-        <th data-sort="duration">Duration</th>
-        <th>History (recent &rarr; old)</th>
+        <th data-sort="workload_type">Workload</th>
+        <th data-sort="catalog">Catalog</th>
+        <th>Categories</th>
+        <th data-sort="primary_pattern">Root Cause</th>
+        <th data-sort="tests_failed">Tests</th>
+        <th data-sort="duration_seconds">Duration</th>
       </tr>
     </thead>
-    <tbody id="jobs-body"></tbody>
+    <tbody id="builds-body"></tbody>
   </table>
-  <div class="empty-state" id="empty-state" style="display:none">No jobs match the current filters.</div>
+  <div class="empty-state" id="empty-state" style="display:none">No builds match the current filters.</div>
 </div>
 
 <script>
-const GCS_API = "https://storage.googleapis.com/storage/v1/b";
-const GCS_DL  = "https://storage.googleapis.com/download/storage/v1/b";
-const GCS_BUCKET = "test-platform-results-public";
-const JOB_PREFIX = "periodic-ci-openshift-sandboxed-containers-operator-devel-";
-const PROW = "https://prow.ci.openshift.org";
-const MAX_BUILDS_PER_JOB = 100;
-const CONCURRENT_JOBS = 6;
-const CONCURRENT_BUILDS = 10;
+const CAT_KEYS = ["infra", "overall", "smoke", "osc", "kata_upstream", "caa"];
+const CAT_LABELS = { infra: "I", overall: "O", smoke: "S", osc: "OSC", kata_upstream: "K", caa: "C" };
+const CAT_NAMES = { infra: "Infrastructure", overall: "Overall", smoke: "Smoke", osc: "OSC", kata_upstream: "Kata Upstream", caa: "CAA" };
 
-const VARIANT_MAP = [
-  ["downstream-candidate500",     { ocp_version: "5.0",  release_type: "Pre-GA" }],
-  ["downstream-candidate422",     { ocp_version: "4.22", release_type: "Pre-GA" }],
-  ["downstream-candidate421-aro", { ocp_version: "4.21", release_type: "Pre-GA", cloud: "aro" }],
-  ["downstream-aro421",           { ocp_version: "4.21", release_type: "Pre-GA", cloud: "aro" }],
-  ["downstream-candidate421",     { ocp_version: "4.21", release_type: "Pre-GA" }],
-  ["downstream-candidate420-aro", { ocp_version: "4.20", release_type: "Pre-GA", cloud: "aro" }],
-  ["downstream-candidate420",     { ocp_version: "4.20", release_type: "Pre-GA" }],
-  ["downstream-candidate",        { ocp_version: "4.19", release_type: "Pre-GA" }],
-  ["downstream-release",          { ocp_version: "4.19", release_type: "GA" }],
-];
-const KNOWN_CLOUDS = new Set(["azure", "aws", "aro"]);
+let manifest = null;
+let sortCol = "start_time";
+let sortAsc = false;
+let expandedBuild = null;
+let detailCache = {};
 
-let dashboardData = { jobs: [] };
-let sortCol = "test_type";
-let sortAsc = true;
-let expandedJob = null;
-let onDemandCache = {};
-let loadStartTime = 0;
-let jobsCompleted = 0;
-let jobsTotal = 0;
-
-function parseJobName(jobName) {
-  if (!jobName.startsWith(JOB_PREFIX))
-    return { cloud: "unknown", ocp_version: "unknown", release_type: "unknown", test_type: jobName };
-
-  const suffix = jobName.slice(JOB_PREFIX.length);
-  let variantMeta = {};
-  let remainder = suffix;
-
-  for (const [vp, meta] of VARIANT_MAP) {
-    if (suffix.startsWith(vp)) {
-      variantMeta = { ...meta };
-      remainder = suffix.slice(vp.length).replace(/^-/, "");
-      break;
-    }
-  }
-
-  let cloud = variantMeta.cloud || null;
-  const ocp_version = variantMeta.ocp_version || "unknown";
-  const release_type = variantMeta.release_type || "unknown";
-  let test_type;
-
-  if (cloud && remainder) {
-    const parts = remainder.split("-");
-    if (parts[0] === cloud) parts.shift();
-    if (parts[0] === "ipi") parts.shift();
-    test_type = parts.join("-") || "unknown";
-  } else if (cloud) {
-    test_type = "unknown";
-  } else if (remainder) {
-    const parts = remainder.split("-");
-    if (KNOWN_CLOUDS.has(parts[0])) {
-      cloud = parts[0];
-      const rest = parts.slice(1);
-      if (rest[0] === "ipi") rest.shift();
-      test_type = rest.join("-") || "unknown";
-    } else {
-      cloud = "N/A";
-      test_type = remainder;
-    }
-  } else {
-    cloud = "unknown";
-    test_type = "unknown";
-  }
-
-  return { cloud: cloud.toUpperCase(), ocp_version, release_type, test_type };
-}
-
-// --- GCS fetching ---
-
-async function gcsListPrefixes(prefix) {
-  let allPrefixes = [];
-  let pageToken = null;
-  do {
-    const params = new URLSearchParams({ prefix, delimiter: "/", maxResults: "5000" });
-    if (pageToken) params.set("pageToken", pageToken);
-    const resp = await fetch(`${GCS_API}/${GCS_BUCKET}/o?${params}`);
-    const data = await resp.json();
-    allPrefixes.push(...(data.prefixes || []));
-    pageToken = data.nextPageToken;
-  } while (pageToken);
-  return allPrefixes;
-}
-
-async function discoverJobs() {
-  const dirs = await gcsListPrefixes(`logs/${JOB_PREFIX}`);
-  return dirs
-    .filter(d => d.startsWith("logs/"))
-    .map(d => d.replace(/\/$/, "").split("/").pop())
-    .sort();
-}
-
-async function fetchBuildResult(jobName, buildId) {
-  const prefix = `logs/${jobName}/${buildId}`;
-  const startedUrl = `${GCS_DL}/${GCS_BUCKET}/o/${encodeURIComponent(prefix + "/started.json")}?alt=media`;
-  const finishedUrl = `${GCS_DL}/${GCS_BUCKET}/o/${encodeURIComponent(prefix + "/finished.json")}?alt=media`;
-
-  const [sResp, fResp] = await Promise.allSettled([fetch(startedUrl), fetch(finishedUrl)]);
-  if (sResp.status !== "fulfilled" || !sResp.value.ok) return null;
-
-  const started = await sResp.value.json();
-  const result = {
-    build_id: buildId,
-    start_time: started.timestamp || 0,
-    status: "pending",
-    duration: null,
-    prow_url: `${PROW}/view/gs/${GCS_BUCKET}/logs/${jobName}/${buildId}`,
-  };
-
-  if (fResp.status === "fulfilled" && fResp.value.ok) {
-    const finished = await fResp.value.json();
-    result.status = finished.passed ? "success" : "failure";
-    result.result = finished.result || "UNKNOWN";
-    if (finished.timestamp && started.timestamp)
-      result.duration = Math.round(finished.timestamp - started.timestamp);
-  }
-  return result;
-}
-
-async function pooledMap(items, fn, concurrency) {
-  const results = new Array(items.length);
-  let idx = 0;
-  async function worker() {
-    while (idx < items.length) {
-      const i = idx++;
-      results[i] = await fn(items[i], i);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
-  return results;
-}
-
-async function fetchJobResults(jobName) {
-  const dirs = await gcsListPrefixes(`logs/${jobName}/`);
-  const buildIds = dirs
-    .map(d => d.replace(/\/$/, "").split("/").pop())
-    .filter(id => /^\d+$/.test(id))
-    .sort((a, b) => parseInt(b) - parseInt(a))
-    .slice(0, MAX_BUILDS_PER_JOB);
-
-  const results = await pooledMap(buildIds, id => fetchBuildResult(jobName, id), CONCURRENT_BUILDS);
-  return results
-    .filter(r => r != null)
-    .sort((a, b) => b.start_time - a.start_time);
-}
-
-function buildJobEntry(jobName, runs) {
-  const meta = parseJobName(jobName);
-  const total = runs.length;
-  const passed = runs.filter(r => r.status === "success").length;
-  return {
-    name: jobName,
-    ...meta,
-    runs,
-    summary: {
-      total_runs: total,
-      passed,
-      failed: total - passed,
-      pass_rate: total > 0 ? Math.round(passed / total * 1000) / 10 : 0,
-      last_run: runs[0]?.start_time || null,
-      last_status: runs[0]?.status || "unknown",
-    },
-    prow_history_url: `${PROW}/job-history/gs/${GCS_BUCKET}/logs/${jobName}`,
-  };
-}
-
-// --- Progress UI ---
-
-function updateProgress(completed, total, currentJob) {
-  const pct = Math.round(completed / total * 100);
-  document.getElementById("progress-bar").style.width = pct + "%";
-  const elapsed = ((performance.now() - loadStartTime) / 1000).toFixed(1);
-  const shortName = currentJob ? currentJob.slice(JOB_PREFIX.length) : "";
-  document.getElementById("progress-text").textContent =
-    `${completed}/${total} jobs loaded · ${elapsed}s elapsed` + (shortName ? ` · ${shortName}` : "");
-}
-
-// --- Main load ---
-
-async function loadLive() {
-  loadStartTime = performance.now();
-  document.getElementById("progress-container").style.display = "";
-
-  document.getElementById("meta-info").textContent = "Discovering jobs from GCS...";
-  let jobNames;
+async function loadManifest() {
   try {
-    jobNames = await discoverJobs();
+    const resp = await fetch("results/manifest.json");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    manifest = await resp.json();
+    initDashboard();
   } catch (e) {
-    document.getElementById("meta-info").textContent = `Error discovering jobs: ${e.message}`;
-    return;
+    document.getElementById("meta-info").textContent =
+      `Error loading manifest: ${e.message}. Run collect.sh first.`;
   }
+}
 
-  jobsTotal = jobNames.length;
-  jobsCompleted = 0;
-  document.getElementById("meta-info").textContent = `Found ${jobsTotal} jobs — fetching results...`;
-  updateProgress(0, jobsTotal, "");
+function initDashboard() {
+  const genDate = new Date(manifest.generated_at);
+  document.getElementById("meta-info").textContent =
+    `Last updated: ${genDate.toLocaleString()} · ${manifest.total_entries} builds`;
 
-  initUI();
-
-  // Show placeholder rows immediately
-  dashboardData.jobs = jobNames.map(name => {
-    const meta = parseJobName(name);
-    return {
-      name, ...meta, runs: [], _loading: true,
-      summary: { total_runs: 0, passed: 0, failed: 0, pass_rate: 0, last_run: null, last_status: "loading" },
-      prow_history_url: `${PROW}/job-history/gs/${GCS_BUCKET}/logs/${name}`,
-    };
-  });
   populateFilters();
+  renderSummary();
   renderTable();
 
-  // Fetch job results with limited concurrency, updating the table as each completes
-  await pooledMap(jobNames, async (name) => {
-    let runs;
-    try {
-      runs = await fetchJobResults(name);
-    } catch (e) {
-      console.error(`Error fetching ${name}:`, e);
-      runs = [];
-    }
-    const entry = buildJobEntry(name, runs);
-    const idx = dashboardData.jobs.findIndex(j => j.name === name);
-    if (idx >= 0) dashboardData.jobs[idx] = entry;
-
-    jobsCompleted++;
-    updateProgress(jobsCompleted, jobsTotal, name);
-    populateFilters();
-    renderSummary();
-    renderTable();
-  }, CONCURRENT_JOBS);
-
-  const elapsed = ((performance.now() - loadStartTime) / 1000).toFixed(1);
-  const totalRuns = dashboardData.jobs.reduce((s, j) => s + j.summary.total_runs, 0);
-  document.getElementById("meta-info").textContent =
-    `Live data · ${dashboardData.jobs.length} jobs · ${totalRuns} runs · loaded in ${elapsed}s`;
-  document.getElementById("progress-container").style.display = "none";
-}
-
-// --- Dashboard UI (same as prefetched version) ---
-
-function initUI() {
   document.querySelectorAll("thead th[data-sort]").forEach(th => {
     th.addEventListener("click", () => {
       const col = th.dataset.sort;
-      if (sortCol === col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = true; }
+      if (sortCol === col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = col !== "start_time"; }
       renderTable();
     });
   });
@@ -452,88 +244,75 @@ function initUI() {
 }
 
 function populateFilters() {
-  const sets = { cloud: new Set(), ocp: new Set(), test: new Set(), release: new Set() };
-  dashboardData.jobs.forEach(j => {
-    sets.cloud.add(j.cloud);
-    sets.ocp.add(j.ocp_version);
-    sets.test.add(j.test_type);
-    sets.release.add(j.release_type);
+  const sets = { provider: new Set(), ocp: new Set(), workload: new Set(), pattern: new Set() };
+  manifest.entries.forEach(e => {
+    if (e.provider) sets.provider.add(e.provider);
+    if (e.ocp_version) sets.ocp.add(e.ocp_version);
+    if (e.workload_type) sets.workload.add(e.workload_type);
+    if (e.primary_pattern) sets.pattern.add(e.primary_pattern);
   });
-  updateSelect("filter-cloud", sorted(sets.cloud));
-  updateSelect("filter-ocp", sorted(sets.ocp));
-  updateSelect("filter-test", sorted(sets.test));
-  updateSelect("filter-release", sorted(sets.release));
+  fillSelect("filter-provider", sorted(sets.provider));
+  fillSelect("filter-ocp", sorted(sets.ocp));
+  fillSelect("filter-workload", sorted(sets.workload));
+  fillSelect("filter-pattern", sorted(sets.pattern));
 }
 
-function updateSelect(id, values) {
+function fillSelect(id, values) {
   const sel = document.getElementById(id);
-  const current = sel.value;
-  const existing = new Set([...sel.options].map(o => o.value));
-  values.forEach(v => {
-    if (!existing.has(v)) {
-      const o = document.createElement("option"); o.value = v; o.textContent = v; sel.appendChild(o);
-      existing.add(v);
-    }
-  });
-  sel.value = current;
+  values.forEach(v => { const o = document.createElement("option"); o.value = v; o.textContent = v; sel.appendChild(o); });
 }
 
 function sorted(set) { return [...set].sort(); }
 
 function getFiltered() {
-  const fc = document.getElementById("filter-cloud").value;
+  const fp = document.getElementById("filter-provider").value;
   const fo = document.getElementById("filter-ocp").value;
-  const ft = document.getElementById("filter-test").value;
-  const fr = document.getElementById("filter-release").value;
+  const fw = document.getElementById("filter-workload").value;
   const fs = document.getElementById("filter-status").value;
+  const fr = document.getElementById("filter-pattern").value;
   const fq = document.getElementById("filter-search").value.toLowerCase();
-  return dashboardData.jobs.filter(j =>
-    (!fc || j.cloud === fc) &&
-    (!fo || j.ocp_version === fo) &&
-    (!ft || j.test_type === ft) &&
-    (!fr || j.release_type === fr) &&
-    (!fs || j.summary.last_status === fs) &&
-    (!fq || j.name.toLowerCase().includes(fq))
+  return manifest.entries.filter(e =>
+    (!fp || e.provider === fp) &&
+    (!fo || e.ocp_version === fo) &&
+    (!fw || e.workload_type === fw) &&
+    (!fs || e.status === fs) &&
+    (!fr || e.primary_pattern === fr) &&
+    (!fq || e.job_name.toLowerCase().includes(fq) || e.build_id.includes(fq))
   );
 }
 
 function renderSummary() {
-  const jobs = getFiltered().filter(j => !j._loading);
-  const total = jobs.length;
-  const passing = jobs.filter(j => j.summary.last_status === "success").length;
-  const failing = jobs.filter(j => j.summary.last_status === "failure").length;
-  const allRuns = jobs.reduce((s, j) => s + j.summary.total_runs, 0);
-  const allPassed = jobs.reduce((s, j) => s + j.summary.passed, 0);
-  const overallRate = allRuns > 0 ? Math.round(allPassed / allRuns * 100) : 0;
+  const builds = getFiltered();
+  const total = builds.length;
+  const passing = builds.filter(b => b.status === "success").length;
+  const failing = builds.filter(b => b.status === "failure").length;
+
+  const patterns = {};
+  builds.forEach(b => { if (b.primary_pattern) patterns[b.primary_pattern] = (patterns[b.primary_pattern] || 0) + 1; });
+  const topPattern = Object.entries(patterns).sort((a, b) => b[1] - a[1])[0];
 
   document.getElementById("summary-bar").innerHTML = `
-    <div class="summary-card"><div class="value">${total}</div><div class="label">Jobs loaded</div></div>
+    <div class="summary-card"><div class="value">${total}</div><div class="label">Builds</div></div>
     <div class="summary-card success"><div class="value">${passing}</div><div class="label">Passing</div></div>
     <div class="summary-card failure"><div class="value">${failing}</div><div class="label">Failing</div></div>
-    <div class="summary-card"><div class="value">${overallRate}%</div><div class="label">Overall Pass Rate</div></div>
-    <div class="summary-card"><div class="value">${allRuns}</div><div class="label">Total Runs</div></div>
+    <div class="summary-card"><div class="value">${total > 0 ? Math.round(passing / total * 100) : 0}%</div><div class="label">Pass Rate</div></div>
+    ${topPattern ? `<div class="summary-card"><div class="value" style="font-size:18px">${esc(topPattern[0])}</div><div class="label">Top failure (${topPattern[1]}x)</div></div>` : ""}
   `;
 }
 
 function renderTable() {
-  const jobs = getFiltered();
-  const tbody = document.getElementById("jobs-body");
+  const builds = getFiltered();
+  const tbody = document.getElementById("builds-body");
   const empty = document.getElementById("empty-state");
 
-  if (jobs.length === 0) { tbody.innerHTML = ""; empty.style.display = ""; return; }
+  if (builds.length === 0) { tbody.innerHTML = ""; empty.style.display = ""; return; }
   empty.style.display = "none";
 
-  jobs.sort((a, b) => {
-    // Loading rows always sort to the bottom
-    if (a._loading && !b._loading) return 1;
-    if (!a._loading && b._loading) return -1;
+  builds.sort((a, b) => {
     let va, vb;
-    if (sortCol === "pass_rate") { va = a.summary.pass_rate; vb = b.summary.pass_rate; }
-    else if (sortCol === "last_run") { va = a.summary.last_run || 0; vb = b.summary.last_run || 0; }
-    else if (sortCol === "last_status") { va = a.summary.last_status; vb = b.summary.last_status; }
-    else if (sortCol === "duration") {
-      va = a.runs[0]?.duration || 0; vb = b.runs[0]?.duration || 0;
-    }
+    if (sortCol === "start_time") { va = a.start_time || ""; vb = b.start_time || ""; }
+    else if (sortCol === "duration_seconds") { va = a.duration_seconds || 0; vb = b.duration_seconds || 0; }
+    else if (sortCol === "tests_failed") { va = a.tests_failed || 0; vb = b.tests_failed || 0; }
     else { va = a[sortCol] || ""; vb = b[sortCol] || ""; }
     if (typeof va === "string") { va = va.toLowerCase(); vb = vb.toLowerCase(); }
     if (va < vb) return sortAsc ? -1 : 1;
@@ -549,162 +328,224 @@ function renderTable() {
   });
 
   tbody.innerHTML = "";
-  jobs.forEach(j => {
+  builds.forEach(b => {
     const tr = document.createElement("tr");
-    tr.dataset.jobName = j.name;
+    tr.className = "build-row";
 
-    if (j._loading) {
-      tr.innerHTML = `
-        <td><span class="status-dot loading"></span></td>
-        <td><strong>${esc(j.test_type)}</strong></td>
-        <td>${esc(j.cloud)}</td>
-        <td>${esc(j.ocp_version)}</td>
-        <td>${esc(j.release_type)}</td>
-        <td style="color:var(--text-muted)">loading...</td>
-        <td></td><td></td><td></td>
-      `;
-      tbody.appendChild(tr);
-      return;
-    }
-
-    const lastRun = j.runs[0];
-    const duration = lastRun?.duration ? formatDuration(lastRun.duration) : "—";
-    const lastTime = j.summary.last_run ? timeAgo(j.summary.last_run) : "—";
+    const testStr = b.tests_total > 0
+      ? `${b.tests_passed}/${b.tests_total}${b.tests_failed > 0 ? ` <span style="color:var(--failure)">(${b.tests_failed} fail)</span>` : ""}`
+      : "—";
 
     tr.innerHTML = `
-      <td><span class="status-dot ${j.summary.last_status}"></span></td>
-      <td><strong>${esc(j.test_type)}</strong></td>
-      <td>${esc(j.cloud)}</td>
-      <td>${esc(j.ocp_version)}</td>
-      <td>${esc(j.release_type)}</td>
-      <td>${passRateHtml(j.summary.pass_rate)}</td>
-      <td title="${j.summary.last_run ? new Date(j.summary.last_run * 1000).toLocaleString() : ''}">${lastTime}</td>
-      <td>${duration}</td>
-      <td>${historyHtml(j.runs)}</td>
+      <td><span class="status-dot ${b.status}"></span></td>
+      <td title="${b.start_time}">${formatDate(b.start_time)}</td>
+      <td>${esc(b.provider || "—")}</td>
+      <td>${esc(b.ocp_version || "—")}</td>
+      <td>${esc(b.workload_type || "—")}</td>
+      <td>${esc(b.catalog || "—")}</td>
+      <td>${categoriesHtml(b.categories)}</td>
+      <td>${patternHtml(b.primary_pattern, b.confidence)}</td>
+      <td>${testStr}</td>
+      <td>${formatDuration(b.duration_seconds)}</td>
     `;
-    tr.addEventListener("click", () => toggleDetail(j));
+    tr.addEventListener("click", () => toggleDetail(b));
     tbody.appendChild(tr);
 
-    if (expandedJob === j.name) {
+    if (expandedBuild === b.build_id) {
       tr.classList.add("expanded");
-      tbody.appendChild(createDetailRow(j));
+      tbody.appendChild(createDetailRow(b));
     }
   });
 }
 
-function passRateHtml(rate) {
-  const color = rate >= 80 ? "var(--success)" : rate >= 50 ? "var(--pending)" : "var(--failure)";
-  return `<span class="pass-rate-bar">
-    <span class="bar"><span class="fill" style="width:${rate}%;background:${color}"></span></span>
-    <span>${rate}%</span>
-  </span>`;
+function categoriesHtml(cats) {
+  if (!cats) return "—";
+  return `<span class="cat-badges">${CAT_KEYS.map(k => {
+    const st = (cats[k] || "unknown").replace(/ /g, "-");
+    return `<span class="cat-badge ${st}" title="${CAT_NAMES[k]}: ${cats[k] || "unknown"}">${CAT_LABELS[k]}</span>`;
+  }).join("")}</span>`;
 }
 
-function historyHtml(runs) {
-  const recent = runs.slice(0, 20);
-  return `<span class="history-bar">${recent.map(r =>
-    `<span class="run-tick ${r.status}" title="${new Date(r.start_time * 1000).toLocaleDateString()} — ${r.status}"></span>`
-  ).join("")}</span>`;
+function patternHtml(pattern, confidence) {
+  if (!pattern) return "—";
+  const cls = pattern.replace(/[^a-zA-Z0-9_]/g, "_");
+  return `<span class="pattern-tag ${cls} default">${esc(pattern)}</span>` +
+    (confidence ? ` <span class="confidence-tag ${confidence}">${confidence}</span>` : "");
 }
 
-function toggleDetail(job) {
-  expandedJob = expandedJob === job.name ? null : job.name;
+function toggleDetail(build) {
+  expandedBuild = expandedBuild === build.build_id ? null : build.build_id;
   renderTable();
+  if (expandedBuild && !detailCache[build.build_id]) loadDetail(build);
 }
 
-function createDetailRow(job) {
+function createDetailRow(build) {
   const tr = document.createElement("tr");
   tr.className = "detail-row";
   const td = document.createElement("td");
-  td.colSpan = 9;
-
-  const allRuns = [...job.runs, ...(onDemandCache[job.name] || [])];
-
-  td.innerHTML = `
-    <div class="detail-panel">
-      <h3>${esc(job.name)} <a href="${job.prow_history_url}" target="_blank">View in Prow &rarr;</a></h3>
-      <table class="runs-table">
-        <thead><tr><th></th><th>Date</th><th>Status</th><th>Duration</th><th>Build</th></tr></thead>
-        <tbody>${allRuns.map(r => `
-          <tr>
-            <td><span class="status-dot ${r.status}"></span></td>
-            <td>${new Date(r.start_time * 1000).toLocaleString()}</td>
-            <td><span class="badge ${r.status}">${r.status}</span></td>
-            <td>${r.duration ? formatDuration(r.duration) : "—"}</td>
-            <td><a href="${r.prow_url}" target="_blank">${r.build_id}</a></td>
-          </tr>
-        `).join("")}</tbody>
-      </table>
-      <button class="load-more-btn" id="load-more-${css(job.name)}" onclick="loadOlderRuns('${esc(job.name)}')">
-        Load older runs
-      </button>
-    </div>
-  `;
+  td.colSpan = 10;
+  const detail = detailCache[build.build_id];
+  td.innerHTML = detail
+    ? renderDetail(build, detail)
+    : `<div class="detail-loading">Loading detailed analysis…</div>`;
   tr.appendChild(td);
   return tr;
 }
 
-async function loadOlderRuns(jobName) {
-  const btn = document.getElementById(`load-more-${css(jobName)}`);
-  if (!btn) return;
-  btn.disabled = true;
-  btn.textContent = "Loading...";
-
-  const existing = new Set();
-  const job = dashboardData.jobs.find(j => j.name === jobName);
-  if (job) job.runs.forEach(r => existing.add(r.build_id));
-  if (onDemandCache[jobName]) onDemandCache[jobName].forEach(r => existing.add(r.build_id));
-
+async function loadDetail(build) {
   try {
-    const buildIds = await listAllBuilds(jobName);
-    const missing = buildIds.filter(id => !existing.has(id)).slice(0, 50);
-
-    const results = await pooledMap(missing, id => fetchBuildResult(jobName, id), CONCURRENT_BUILDS);
-    const newRuns = results.filter(Boolean).sort((a, b) => b.start_time - a.start_time);
-
-    if (!onDemandCache[jobName]) onDemandCache[jobName] = [];
-    onDemandCache[jobName].push(...newRuns);
-    renderTable();
+    const resp = await fetch(`results/${build.file}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    detailCache[build.build_id] = await resp.json();
   } catch (e) {
-    console.error("Failed to load older runs:", e);
-    btn.textContent = "Error — retry";
-    btn.disabled = false;
+    detailCache[build.build_id] = { _error: e.message };
   }
+  if (expandedBuild === build.build_id) renderTable();
 }
 
-async function listAllBuilds(jobName) {
-  const dirs = await gcsListPrefixes(`logs/${jobName}/`);
-  return dirs
-    .map(d => d.replace(/\/$/, "").split("/").pop())
-    .filter(id => /^\d+$/.test(id))
-    .sort((a, b) => parseInt(b) - parseInt(a));
+function renderDetail(build, detail) {
+  if (detail._error) return `<div class="detail-panel"><p>Error loading details: ${esc(detail._error)}</p></div>`;
+
+  const pj = detail.prowjob || {};
+  const fa = detail.failure_analysis || {};
+  const rc = detail.root_cause || fa.root_cause || {};
+  const cats = detail.result_categories || {};
+  const arts = detail.artifacts || {};
+  const suites = detail.testsuites || {};
+  const variant = build.variant || (detail.metadata || {}).variant || "";
+
+  let html = `<div class="detail-panel">`;
+
+  html += `<h3>${esc(variant || build.job_name)}
+    <a href="${esc(pj.url || "")}" target="_blank">Prow →</a>
+    <span style="font-size:12px;color:var(--text-muted)">Build ${esc(build.build_id)}</span>
+  </h3>`;
+
+  // Catalog info
+  const md = detail.metadata || {};
+  const catalogTag = md.catalog_full_tag || "";
+  const catalogVer = md.catalog_version || "";
+  const catalogDate = md.catalog_build_date || "";
+  if (catalogTag || catalogVer) {
+    html += `<div class="detail-section" style="margin-bottom:12px">
+      <table class="cat-table" style="width:auto">
+        <tr><td style="font-weight:600">Catalog</td><td>${esc(catalogTag || catalogVer)}</td></tr>
+        ${catalogDate && catalogDate !== "not set" ? `<tr><td style="font-weight:600">Catalog built</td><td>${esc(catalogDate)}</td></tr>` : ""}
+        ${md.kata_rpm_version ? `<tr><td style="font-weight:600">Kata RPM</td><td>${esc(md.kata_rpm_version)}</td></tr>` : ""}
+        ${md.expected_operator_version ? `<tr><td style="font-weight:600">Operator version</td><td>${esc(md.expected_operator_version)}</td></tr>` : ""}
+      </table>
+    </div>`;
+  }
+
+  // Category breakdown
+  html += `<div class="detail-section"><h4>Result Categories</h4>
+    <table class="cat-table"><thead><tr><th>Category</th><th>Status</th><th>Time</th><th>Pattern</th><th>Root Cause</th></tr></thead><tbody>`;
+  for (const key of CAT_KEYS) {
+    const c = cats[key] || {};
+    const st = c.status || "unknown";
+    html += `<tr>
+      <td><strong>${esc(CAT_NAMES[key])}</strong></td>
+      <td><span class="badge ${st.replace(/ /g, "-")}">${esc(st)}</span></td>
+      <td>${formatHHMM(c.time)}</td>
+      <td>${c.primary_pattern ? `<span class="pattern-tag default ${c.primary_pattern}">${esc(c.primary_pattern)}</span>` : "—"}</td>
+      <td style="white-space:normal;max-width:400px">${esc(c.root_cause || "—")}</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  // Root cause
+  if (rc.primary_pattern) {
+    html += `<div class="detail-section"><h4>Root Cause Analysis</h4>
+      <div class="root-cause-box">
+        <span class="cause-label">Pattern:</span> <span class="pattern-tag default ${rc.primary_pattern}">${esc(rc.primary_pattern)}</span>
+        <span class="confidence-tag ${rc.confidence || ""}" style="margin-left:8px">${esc(rc.confidence || "")}</span><br>
+        <span class="cause-label">Cause:</span> ${esc(rc.likely_cause || "—")}
+        ${rc.suggested_actions?.length ? `<br><span class="cause-label">Suggested:</span> ${rc.suggested_actions.map(esc).join("; ")}` : ""}
+      </div></div>`;
+  }
+
+  // Failing tests
+  const failingTests = fa.failing_tests || [];
+  if (failingTests.length > 0) {
+    html += `<div class="detail-section"><h4>Failing Tests (${failingTests.length})</h4>
+      <table class="tests-table"><thead><tr><th>Test</th><th>Suite</th><th>Case #</th><th>Duration</th></tr></thead><tbody>`;
+    for (const t of failingTests) {
+      html += `<tr>
+        <td style="white-space:normal;max-width:500px">${esc(t.name || t.description || "—")}</td>
+        <td>${esc(t.suite || "—")}</td>
+        <td>${esc(t.test_case_number || "—")}</td>
+        <td>${t.duration != null ? t.duration.toFixed(1) + "s" : "—"}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  // Per-suite detail
+  const suiteKeys = Object.keys(suites).filter(k => suites[k].step_exists);
+  if (suiteKeys.length > 0) {
+    html += `<div class="detail-section"><h4>Test Suites</h4>
+      <table class="cat-table"><thead><tr><th>Suite</th><th>Status</th><th>Tests</th><th>Passed</th><th>Failed</th><th>Skipped</th><th>Time</th></tr></thead><tbody>`;
+    for (const k of suiteKeys) {
+      const s = suites[k];
+      const st = s.status || "unknown";
+      html += `<tr>
+        <td><strong>${esc(k)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${esc(s.step_name || "")}</span></td>
+        <td><span class="badge ${st}">${esc(st)}</span>${s.is_test_bug ? ' <span class="badge TEST_BUG">test bug</span>' : ""}</td>
+        <td>${s.tests ?? "—"}</td><td>${s.passed ?? "—"}</td>
+        <td>${s.failures ? `<strong style="color:var(--failure)">${s.failures}</strong>` : (s.failures ?? "—")}</td>
+        <td>${s.skipped ?? "—"}</td><td>${formatHHMM(s.elapsed_time)}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  // Artifacts
+  const artLinks = Object.entries(arts).filter(([, v]) => v);
+  if (artLinks.length > 0) {
+    html += `<div class="detail-section"><h4>Artifacts</h4>
+      <table class="artifacts-table"><tbody>`;
+    for (const [name, url] of artLinks) {
+      html += `<tr><td>${esc(name)}</td><td><a href="${esc(url)}" target="_blank">${esc(url.split("/").slice(-2).join("/"))}</a></td></tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function formatHHMM(t) {
+  if (!t || t === "unknown") return "—";
+  const m = t.match(/^(\d+):(\d+)$/);
+  if (!m) return esc(t);
+  const h = parseInt(m[1]), min = parseInt(m[2]);
+  if (h > 0) return `${h}h ${min}m`;
+  return `${min}m`;
+}
+
+function formatDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-CA") + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDuration(seconds) {
-  if (seconds < 60) return `${seconds}s`;
+  if (!seconds) return "—";
   const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  if (m < 60) return `${m}m ${s}s`;
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}m`;
 }
 
-function timeAgo(ts) {
-  const diff = Math.floor(Date.now() / 1000 - ts);
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
+function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
-function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
-function css(s) { return s.replace(/[^a-zA-Z0-9-]/g, "_"); }
 function resetFilters() {
   document.querySelectorAll(".filters select").forEach(s => s.value = "");
   document.getElementById("filter-search").value = "";
   renderSummary(); renderTable();
 }
 
-loadLive();
+loadManifest();
 </script>
 </body>
 </html>
